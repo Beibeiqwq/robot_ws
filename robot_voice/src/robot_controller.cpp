@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <string.h>
 #include <ros/ros.h>
 #include <std_msgs/String.h>
 #include <geometry_msgs/Twist.h>
@@ -20,7 +19,7 @@
 #include <robot_voice/StringToVoice.h>
 #include "wpb_home_tutorials/Follow.h"
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
-
+using namespace std;
 class RobotController {
 public:
   RobotController() {
@@ -38,7 +37,7 @@ public:
     return 0;
   }
 
-  void ToDownstream(const std::string& answer_txt, float linear_x, float angular_z) {
+  void ToDownstream(const std::string& answer_txt) {
   	// 通过 str2voice 服务和 /cmd_vel topic向下游 voice_creator 和 mbot_gazebo 发送
     robot_voice::StringToVoice::Request req;
     robot_voice::StringToVoice::Response resp;
@@ -47,10 +46,6 @@ public:
     bool ok = client_.call(req, resp);
     if (ok) {
       printf("send str2voice service success: %s, and pub cmd_vel\n", req.data.c_str());
-       geometry_msgs::Twist msg;
-       msg.linear.x = linear_x;
-       msg.angular.z = angular_z;
-       cmd_pub_.publish(msg);
     } else {
       ROS_ERROR("failed to send str2voice service");
     }
@@ -62,28 +57,29 @@ public:
 	// 根据指令关键字，发送对应的语音播包文字和 cmd_vel 命令
     if (voice_txt.find("你好") != std::string::npos) 
     {
-      ToDownstream("你好 我是天天开心小队制作的服务机器人", 0, 0);
+      ToDownstream("你好 我是天天开心小队制作的服务机器人");
     } 
     else if (voice_txt.find("功能") != std::string::npos) 
     {
-      ToDownstream("我可以进行人体日常行为识别 还可以自主识别垃圾 并完成房间中的垃圾清理", 0, 0);
+      ToDownstream("我可以进行人体日常行为识别 还可以自主识别垃圾 并完成房间中的垃圾清理");
     }
     else if(voice_txt.find("导航") != std::string::npos)
     {
-      ToDownstream("现在开始前往指定地点", 0, 0);
+      ToDownstream("现在开始前往指定地点");
       sleep(5);
       Goto("cmd");
     } 
     resp.success = true;
     return resp.success;
   }
-  bool Goto(std::string inStr)
+
+  bool Goto(string inStr)
 {
-    std::string strGoto = inStr;
+    string strGoto = inStr;
     srvName.request.name = strGoto;
     if (cliGetWPName.call(srvName))
     {
-        std::string name = srvName.response.name;
+        string name = srvName.response.name;
         float x = srvName.response.pose.position.x;
         float y = srvName.response.pose.position.y;
         ROS_INFO("Get_wp_name: name = %s (%.2f,%.2f)", strGoto.c_str(), x, y);
@@ -105,6 +101,7 @@ public:
             if (ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
             {
                 ROS_INFO("Arrived at %s!", strGoto.c_str());
+                ToDownstream("我已经到达指定地点了");
                 return true;
             }
             else

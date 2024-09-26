@@ -4,9 +4,14 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
-  std_msgs
-  geometry_msgs
   message_generation
+  pcl_conversions pcl_ros 
+  cv_bridge image_transport tf 
+  sensor_msgs geometry_msgs std_msgs visualization_msgs 
+  image_geometry message_generation
+  move_base_msgs actionlib
+  wpb_home_bringup wpb_home_tutorials wpb_home_behaviors
+  xfyun_waterplus waterplus_map_tools
 )
 add_service_files(
   FILES
