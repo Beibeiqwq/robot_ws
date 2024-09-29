@@ -5,12 +5,11 @@
 using namespace std;
 
 #define ACT_GOTO			1
-#define ACT_FIND_PERSON     2
-#define ACT_DETECT_ACTION_0 3
-#define ACT_DETECT_ACTION_1 4
-#define ACT_FIND_OBJ		5
-#define ACT_GRAB			6
-#define ACT_PASS			7 //DUSTBIN
+#define ACT_DETECT_ACTION_0 2
+#define ACT_DETECT_ACTION_1 3
+#define ACT_FIND_OBJ		4
+#define ACT_GRAB			5
+#define ACT_PASS			6 //DUSTBIN
 #define ACT_SPEAK			101
 #define ACT_MOVE			102
 #define ACT_ADD_WAYPOINT	103

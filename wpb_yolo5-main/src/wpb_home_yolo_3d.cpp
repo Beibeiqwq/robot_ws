@@ -65,7 +65,7 @@ void callbackColorImage(const sensor_msgs::ImageConstPtr& msg)
     
     ROS_INFO("[wpb_home_yolo_3d] 发送一帧图像给 yolo5_node");
     predict_pub.publish(msg); 
-    flag_predicted = false;
+    //flag_predicted = false;
 }
 
 void callbackBbox(const wpb_yolo5::BBox2D &msg)
@@ -451,7 +451,7 @@ int main(int argc, char **argv)
     //彩色图像订阅
     ros::Subscriber rgb_sub = nh.subscribe("/kinect2/qhd/image_color_rect", 1 , callbackColorImage);
     //点云图像订阅
-    ros::Subscriber pc_sub = nh.subscribe("/kinect2/qhd/points", 1 , callbackPointCloud);
+    //ros::Subscriber pc_sub = nh.subscribe("/kinect2/qhd/points", 1 , callbackPointCloud);
     //命令订阅
     ros::Subscriber cmd_sub = nh.subscribe("/yolo/cmd", 1 , callbackCmd);
     //2D识别结果订阅

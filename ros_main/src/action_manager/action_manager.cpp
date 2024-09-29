@@ -8,13 +8,10 @@ static ros::ServiceClient clientIAT;
 static xfyun_waterplus::IATSwitch srvIAT;
 static ros::ServiceClient cliGetWPName;
 static waterplus_map_tools::GetWaypointByName srvName;
-static ros::ServiceClient follow_start;
-static ros::ServiceClient follow_stop;
 static wpb_home_tutorials::Follow srvFlw;
 static ros::Publisher behaviors_pub;
 static std_msgs::String behavior_msg;
 static ros::Publisher add_waypoint_pub;
-static int nToRecoFrame = 100;
 //构造函数
 CActionManager::CActionManager()
 {
@@ -42,7 +39,7 @@ void CActionManager::Init()
     vel_pub = n.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
     //客户端::语音识别
     clientIAT = n.serviceClient<xfyun_waterplus::IATSwitch>("xfyun_waterplus/IATSwitch");
-    //发布者::行为发布
+    
     behaviors_pub = n.advertise<std_msgs::String>("/wpb_home/behaviors", 30);
     //发布者::航点添加
     add_waypoint_pub = n.advertise<waterplus_map_tools::Waypoint>( "/waterplus/add_waypoint", 1);
@@ -110,7 +107,7 @@ static void AddNewWaypoint(string inStr)
 
     ROS_WARN("[New Waypoint] %s ( %.2f , %.2f )" , new_waypoint.name.c_str(), tx, ty);
 }
-//初始化上一次任务
+
 static int nLastActCode = -1;
 static geometry_msgs::Twist vel_cmd;
 //主状态机
@@ -131,47 +128,21 @@ bool CActionManager::Main()
     //nLastActCode == 上一个任务ID
     switch (nCurActCode)
 	{
-	case ACT_GOTO:
-		if (nLastActCode != ACT_GOTO)
-		{
-			string strGoto = arAct[nCurActIndex].strTarget;
-            printf("[ActMgr] %d - Goto %s",nCurActIndex,strGoto.c_str());
-            srvName.request.name = strGoto;
-            if (cliGetWPName.call(srvName))
-            {
-                std::string name = srvName.response.name;
-                float x = srvName.response.pose.position.x;
-                float y = srvName.response.pose.position.y;
-                ROS_INFO("Get_wp_name: name = %s (%.2f,%.2f)", strGoto.c_str(),x,y);
-
-                MoveBaseClient ac("move_base", true);
-                if(!ac.waitForServer(ros::Duration(5.0)))
-                {
-                    ROS_INFO("The move_base action server is no running. action abort...");
-                }
-                else
-                {
-                    move_base_msgs::MoveBaseGoal goal;
-                    goal.target_pose.header.frame_id = "map";
-                    goal.target_pose.header.stamp = ros::Time::now();
-                    goal.target_pose.pose = srvName.response.pose;
-                    ac.sendGoal(goal);
-                    ac.waitForResult();
-                    if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
-                        ROS_INFO("Arrived at %s!",strGoto.c_str());
-                    else
-                        ROS_INFO("Failed to get to %s ...",strGoto.c_str() );
-                }
-                
-            }
-            else
-            {
-                ROS_ERROR("Failed to call service GetWaypointByName");
-            }
-            nCurActIndex ++;
+//ACT_DETECT_ACTION_0
+    case ACT_DETECT_ACTION_0:
+        if(nLastActCode != ACT_DETECT_ACTION_0)
+        {
+            printf("[ActMgr]ACT_DETECT_ACTION:");
         }
-		break;
-
+        break;
+//ACT_DETECT_ACTION_1
+    case ACT_DETECT_ACTION_1:
+        if(nLastActCode != ACT_DETECT_ACTION_1)
+        {
+            printf("[ActMgr]ACT_DETECT_ACTION:");
+        }
+        break;
+        
 	case ACT_FIND_OBJ:
 		if (nLastActCode != ACT_FIND_OBJ)
 		{
@@ -194,7 +165,7 @@ bool CActionManager::Main()
             nCurActIndex ++;
         }
 		break;
-
+//DUSTBIN
 	case ACT_PASS:
 		if (nLastActCode != ACT_PASS)
 		{
@@ -222,46 +193,6 @@ bool CActionManager::Main()
             usleep(arAct[nCurActIndex].nDuration*1000*1000);
             nCurActIndex ++;
 		}
-		break;
-
-	case ACT_LISTEN:
-		if (nLastActCode != ACT_LISTEN)
-		{
-            printf("[ActMgr] %d - Listen %s\n",nCurActIndex,arAct[nCurActIndex].strTarget.c_str());
-            strListen = "";
-            strKeyWord = arAct[nCurActIndex].strTarget;
-            int nDur = arAct[nCurActIndex].nDuration;
-            if(nDur < 3)
-            {
-                nDur = 3;
-            }
-            //开始语音识别
-            srvIAT.request.active = true;
-            srvIAT.request.duration = nDur;
-            clientIAT.call(srvIAT);
-		}
-        nKeyWord = strListen.find(strKeyWord);
-        if(nKeyWord >= 0)
-        {
-            //识别完毕,关闭语音识别
-            srvIAT.request.active = false;
-            clientIAT.call(srvIAT);
-            nCurActIndex ++;
-        }
-		break;
-
-    case ACT_MOVE:
-        printf("[ActMgr] %d - Move ( %.2f , %.2f ) - %.2f\n",nCurActIndex,arAct[nCurActIndex].fLinear_x,arAct[nCurActIndex].fLinear_y,arAct[nCurActIndex].fAngular_z);
-        vel_cmd.linear.x = arAct[nCurActIndex].fLinear_x;
-        vel_cmd.linear.y = arAct[nCurActIndex].fLinear_y;
-        vel_cmd.linear.z = 0;
-        vel_cmd.angular.x = 0;
-        vel_cmd.angular.y = 0;
-        vel_cmd.angular.z = arAct[nCurActIndex].fAngular_z;
-        vel_pub.publish(vel_cmd);
-
-        usleep(arAct[nCurActIndex].nDuration*1000*1000);
-        nCurActIndex ++;
 		break;
 
     case ACT_ADD_WAYPOINT:
@@ -322,11 +253,6 @@ string ActionText(stAct* inAct)
     if(inAct->nAct == ACT_SPEAK)
     {
         ActText = "说话 ";
-        ActText += inAct->strTarget;
-    }
-    if(inAct->nAct == ACT_LISTEN)
-    {
-        ActText = "听取关键词 ";
         ActText += inAct->strTarget;
     }
     if(inAct->nAct == ACT_MOVE)

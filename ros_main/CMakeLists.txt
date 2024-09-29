@@ -152,6 +152,22 @@ add_executable(simple_nav src/simple_nav.cpp)
 add_executable(nav_test2 src/nav_test2.cpp)
 add_executable(object_speak src/object_speak.cpp)
 
+add_executable(entrance_detect
+  src/entrance_detect.cpp
+)
+add_dependencies(entrance_detect ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(entrance_detect
+  ${catkin_LIBRARIES}
+)
+add_executable(ROBOCUP
+  src/ROBOCUP.cpp
+  src/action_manager/action_manager.cpp
+)
+add_dependencies(ROBOCUP ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(ROBOCUP
+  ${catkin_LIBRARIES}
+)
+
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use

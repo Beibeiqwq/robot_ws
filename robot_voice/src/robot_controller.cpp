@@ -63,11 +63,11 @@ public:
     {
       ToDownstream("我可以进行人体日常行为识别 还可以自主识别垃圾 并完成房间中的垃圾清理");
     }
-    else if(voice_txt.find("导航") != std::string::npos)
+    else if(voice_txt.find("请带我去卧室") != std::string::npos)
     {
-      ToDownstream("现在开始前往指定地点");
+      ToDownstream("现在开始前往指定地点 卧室");
       sleep(5);
-      Goto("cmd");
+      //Goto("cmd");
     } 
     resp.success = true;
     return resp.success;
