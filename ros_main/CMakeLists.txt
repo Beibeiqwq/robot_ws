@@ -147,10 +147,6 @@ link_directories(${PCL_LIBRARY_DIRS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(robot_is_entrance src/robot_is_entrance.cpp)
-add_executable(simple_nav src/simple_nav.cpp)
-add_executable(nav_test2 src/nav_test2.cpp)
-add_executable(object_speak src/object_speak.cpp)
 
 add_executable(entrance_detect
   src/entrance_detect.cpp
@@ -163,8 +159,16 @@ add_executable(ROBOCUP
   src/ROBOCUP.cpp
   src/action_manager/action_manager.cpp
 )
+add_executable(main
+  src/main.cpp
+  src/action_manager/action_manager.cpp
+)
 add_dependencies(ROBOCUP ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(ROBOCUP
+  ${catkin_LIBRARIES}
+)
+add_dependencies(main ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(main
   ${catkin_LIBRARIES}
 )
 
@@ -176,24 +180,9 @@ target_link_libraries(ROBOCUP
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
-add_dependencies(robot_is_entrance ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(simple_nav ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(nav_test2 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(object_speak ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(robot_is_entrance
-  ${catkin_LIBRARIES}
-)
-target_link_libraries(simple_nav
-  ${catkin_LIBRARIES}
-)
-target_link_libraries(nav_test2
-  ${catkin_LIBRARIES}
-)
-target_link_libraries(object_speak
-  ${catkin_LIBRARIES}
-)
 #############
 ## Install ##
 #############

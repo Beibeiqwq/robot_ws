@@ -30,6 +30,7 @@ static CActionManager action_manager;
 #define STATE_ACTION 3
 #define STATE_CHECK 4
 #define STATE_GOTO_EXIT 5
+#define STATE_GRAB 8
 
 #define FIND_PERSON 6
 #define FIND_OBJECT 7
@@ -230,7 +231,11 @@ static void YoloStart()
     Str.data = "start";
     yolo_pub.publish(Str);
 }
+static void OpenPose_Detect()
+{
+    ROS_INFO("OPENPOSE_NODE START!");
 
+}
 static int nOpenCount = 0; // 延时 防止误判
 /// @brief 开门检测
 /// @param msg Entrance Detect节点传来的消息
@@ -260,7 +265,7 @@ void ActionDetect()
         Speak("OK You can perform next action");
         nPeopleCount++;
     }
-    YoloStart();
+    //YoloStart();
     string Action = FindWord(YOLO_BBOX, arKWAction);
     printf("识别到动作 - %s \n", Action.c_str());
     Speak(Action);
@@ -299,7 +304,7 @@ void KeywordCB(const wpb_yolo5::BBox2D &msg)
             ++nActionStage;
             if (nActionStage == 1)
             {
-                Speak("Hello I will observe your action now");
+                Speak("动作识别开始");
                 sleep(2);
                 YoloStart();
             }
@@ -312,7 +317,7 @@ void KeywordCB(const wpb_yolo5::BBox2D &msg)
             }
             if (nActionStage == 3)
             {
-                Speak("OK You can perform next action");
+                Speak("请展示下一个动作");
                 YoloStart();
             }
             if (nActionStage == 4)
@@ -350,7 +355,7 @@ void KeywordCB(const wpb_yolo5::BBox2D &msg)
     }
     if (bAction == true)
     {
-        nState = STATE_ACTION; // 物品抓取
+        nState = STATE_GRAB; // 物品抓取
     }
 
     if (nPeopleCount == 3 && nLitterCount == 3)
@@ -377,7 +382,7 @@ int main(int argc, char **argv)
     vel_pub = n.advertise<geometry_msgs::Twist>("/cmd_vel", 30);
     yolo_pub = n.advertise<std_msgs::String>("/yolov5/cmd", 20);
 
-    ROS_INFO("[main] ROBOCUP@HOME START!");
+    ROS_INFO("[DayDayHappy] ROBOCUP@HOME NODE START!");
     ros::Rate r(10);
     while (ros::ok())
     {
@@ -386,11 +391,11 @@ int main(int argc, char **argv)
             if (nOpenCount > 20)
             {
                 Goto("cmd");
-                Speak("I have reached the target position");
+                Speak("我已到达进门地点");
                 sleep(2); // 停留
                 Goto("living room");
                 nState = FIND_PERSON;
-                YoloStart();
+                //YoloStart();
             }
         }
         if (nState == STATE_ACTION)
@@ -400,7 +405,7 @@ int main(int argc, char **argv)
         if (nState == STATE_GOTO_EXIT && bGotoExit == true)
         {
             Goto("exit");
-            Speak("Task Finish");
+            Speak("任务结束");
             sleep(1000);
         }
         ros::spinOnce();
