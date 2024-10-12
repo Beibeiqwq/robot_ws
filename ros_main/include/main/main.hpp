@@ -46,17 +46,16 @@
 #include "xfyun_waterplus/IATSwitch.h"
 #include <waterplus_map_tools/GetWaypointByName.h>
 #include <robot_voice/StringToVoice.h>
-/*---------------有限状态机区---------------*/
-#define STATE_READY 0
-#define STATE_WAIT_ENTR 1
-#define STATE_WAIT_CMD 2
-#define STATE_ACTION 3
-#define STATE_GOTO_EXIT 4
-#define STATE_GRAB 5
-#define FIND_PERSON 6
-#define FIND_OBJECT 7
+/*---------------状态机区---------------*/
+#define STATE_READY               0
+#define STATE_WAIT_ENTR           1
+#define STATE_WAIT_CMD            2
+#define STATE_ACTION              3
+#define STATE_GOTO_EXIT           4
+#define STATE_GRAB                5
+#define FIND_PERSON               6
+#define FIND_OBJECT               7
 
-using namespace std;
 /*---------------别名定义区---------------*/
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
@@ -72,6 +71,7 @@ typedef struct BBox2D
     float probability;
 } BBox2D;
 
+using namespace std;
 /*---------------主程序区域---------------*/
 namespace Main
 {
@@ -82,17 +82,15 @@ namespace Main
         ~MainNode() {};
         void init()
         {
-            Init_keywords();
-            // action_manager.Init();
-
             ros::NodeHandle n;
-            ros::Subscriber sub_yolo = n.subscribe("/yolo_bbox_2d", 10, &MainNode::KeywordCB,this);
-            ros::Subscriber sub_ent = n.subscribe("/wpb_home/entrance_detect", 10, &MainNode::EntranceCB,this);
-            ros::Timer Task_Timer;
+            Init_keywords();
+            /*---------------ROS初始化区---------------*/
+            sub_yolo = n.subscribe("/yolo_bbox_2d", 10, &MainNode::KeywordCB,this);
+            sub_ent  = n.subscribe("/wpb_home/entrance_detect", 10, &MainNode::EntranceCB,this);
             client_speak = n.serviceClient<robot_voice::StringToVoice>("str2voice");
             cliGetWPName = n.serviceClient<waterplus_map_tools::GetWaypointByName>("/waterplus/get_waypoint_name");
-            spk_pub = n.advertise<sound_play::SoundRequest>("/robotsound", 20);
-            vel_pub = n.advertise<geometry_msgs::Twist>("/cmd_vel", 30);
+            spk_pub  = n.advertise<sound_play::SoundRequest>("/robotsound", 20);
+            vel_pub  = n.advertise<geometry_msgs::Twist>("/cmd_vel", 30);
             yolo_pub = n.advertise<std_msgs::String>("/yolov5/cmd", 20);
         }
 
@@ -101,18 +99,21 @@ namespace Main
         ros::Publisher spk_pub;
         ros::Publisher vel_pub;
         ros::Publisher yolo_pub;
+        ros::Subscriber sub_yolo;
+        ros::Subscriber sub_ent;
         ros::ServiceClient client_speak;
         ros::ServiceClient cliGetWPName;
+        ros::Timer Task_Timer;
         waterplus_map_tools::GetWaypointByName srvName;
         /*---------------全局变量区---------------*/
         int nState = STATE_READY;    // 初始状态
-        float vel_max = 0.5;         // 移动限速
         int nOpenCount = 0;          // 开门计数
         int nPeopleCount = 0;        // 人物计数
         int nLitterCount = 0;        // 垃圾计数
+        int nActionStage = 0;        // 动作标志位
+        float vel_max = 0.5;         // 移动限速
         bool bGotoExit = false;      // 退出标志位
         bool bArrive = false;        // 到达标志位
-        int nActionStage = 0;        // 动作标志位
         string strDetect;
         /*---------------数组/容器区---------------*/
         std::vector<BBox2D> YOLO_BBOX;                    // 识别结果
