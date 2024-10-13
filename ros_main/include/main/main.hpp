@@ -37,7 +37,6 @@
 #include <actionlib/client/simple_action_client.h>
 #include <waterplus_map_tools/Waypoint.h>
 #include <waterplus_map_tools/GetWaypointByName.h>
-// YOLOV5 HEADER
 #include <wpb_yolo5/BBox2D.h>
 #include <wpb_yolo5/BBox3D.h>
 #include <sound_play/SoundRequest.h>
@@ -52,10 +51,10 @@
 #define STATE_WAIT_CMD            2
 #define STATE_ACTION              3
 #define STATE_GOTO_EXIT           4
-#define STATE_GRAB                5
-#define FIND_PERSON               6
-#define FIND_OBJECT               7
-
+#define ACT_CLEAR                 101
+#define ACT_FIND_PERSON           102
+#define ACT_FIND_OBJECT           103
+#define ACT_GRAB_OBJECT           104
 /*---------------别名定义区---------------*/
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
@@ -72,7 +71,6 @@ typedef struct BBox2D
 } BBox2D;
 
 using namespace std;
-/*---------------主程序区域---------------*/
 namespace Main
 {
     class MainNode
@@ -84,7 +82,14 @@ namespace Main
         {
             ros::NodeHandle n;
             Init_keywords();
-            /*---------------ROS初始化区---------------*/
+            /*---------------参数导入区---------------*/
+            n.param<string>("enter",coord_cmd,"cmdA");
+            n.param<string>("place1",arKWPlacement[1],"living room");
+            n.param<string>("place2",arKWPlacement[2],"kitchen");
+            n.param<string>("place3",arKWPlacement[3],"bedroom");
+            n.param<string>("place4",arKWPlacement[4],"dining room");
+            n.param<string>("exit",coord_exit,"exitA");
+            /*---------------ROS初始化---------------*/
             sub_yolo = n.subscribe("/yolo_bbox_2d", 10, &MainNode::KeywordCB,this);
             sub_ent  = n.subscribe("/wpb_home/entrance_detect", 10, &MainNode::EntranceCB,this);
             client_speak = n.serviceClient<robot_voice::StringToVoice>("str2voice");
@@ -92,6 +97,29 @@ namespace Main
             spk_pub  = n.advertise<sound_play::SoundRequest>("/robotsound", 20);
             vel_pub  = n.advertise<geometry_msgs::Twist>("/cmd_vel", 30);
             yolo_pub = n.advertise<std_msgs::String>("/yolov5/cmd", 20);
+            /*---------------主程序区域---------------*/
+            cout << "[Main]请检查程序参数...."<< endl;
+            Parameter_Check();
+            cout << "[Main]键入任意数字开始.... 按CTRL+Z退出" << endl;
+            cin >> check_flag;
+            nState = STATE_WAIT_ENTR;
+            while (ros::ok())
+            {
+                if (nState == STATE_WAIT_ENTR)
+                {
+                    if (nOpenCount > 20)
+                    {
+                        Goto(coord_cmd);
+                        Speak("我已到达进门地点");
+                        sleep(2);
+                        nState = STATE_ACTION;
+                    }
+                }
+                if(nState == STATE_ACTION)
+                {
+                    Task_Timer = n.createTimer(ros::Duration(0.05), &MainNode::MainCallback, this);
+                }
+            }
         }
 
     private:
@@ -106,15 +134,23 @@ namespace Main
         ros::Timer Task_Timer;
         waterplus_map_tools::GetWaypointByName srvName;
         /*---------------全局变量区---------------*/
+        int check_flag;              // 程序进入
         int nState = STATE_READY;    // 初始状态
-        int nOpenCount = 0;          // 开门计数
+        int nAct   = ACT_CLEAR;      // 任务状态
+        int nOpenCount   = 0;        // 开门计数
         int nPeopleCount = 0;        // 人物计数
         int nLitterCount = 0;        // 垃圾计数
+        int nPlaceCount  = 1;        // 地点计数
         int nActionStage = 0;        // 动作标志位
-        float vel_max = 0.5;         // 移动限速
-        bool bGotoExit = false;      // 退出标志位
-        bool bArrive = false;        // 到达标志位
+        float vel_max    = 0.5;      // 移动限速
+        bool bGotoExit   = false;    // 退出标志位
+        bool bArrive     = false;    // 到达标志位
+        bool bPeopleFound= false;    // 人物标志位
+        bool bObjectFound= false;    // 物品标志位
+        bool bGrab       = false;    // 抓取标志位
         string strDetect;
+        string coord_cmd;            // 进门坐标
+        string coord_exit;           // 出门坐标
         /*---------------数组/容器区---------------*/
         std::vector<BBox2D> YOLO_BBOX;                    // 识别结果
         std::vector<BBox2D>::const_iterator YOLO_BBOX_IT; // 迭代器
@@ -127,11 +163,6 @@ namespace Main
         /// @brief 关键词初始化
         void Init_keywords()
         {
-            // 地点关键词
-            arKWPlacement.push_back("living room");
-            arKWPlacement.push_back("kitchen");
-            arKWPlacement.push_back("room");
-
             // 物品关键词
             arKWObject.push_back("Water");
             arKWObject.push_back("Chip");
@@ -354,70 +385,83 @@ namespace Main
                 }
                 YOLO_BBOX = recv_BBOX; // 存入object
             }
+        }
 
-            if (nState == FIND_PERSON)
+        /// @brief 视角修正
+        void Fixed_View()
+        {
+            cout << "[Fixed_View]位姿修正开始..." << endl;
+        }
+
+        /// @brief 物品抓取
+        void Grab()
+        {
+            cout<< "[Grub]物品抓取开始..."  << endl;
+        }
+        /// @brief 程序参数打印
+        void Parameter_Check()
+        {
+            cout << ">>>>>>>>>>>>>>>>>>>>>>>>>> Parameter_Check <<<<<<<<<<<<<<<<<<<<<<<" << endl;
+            cout << "Enter Coord:" << coord_cmd << endl;
+            cout << "Place1:" << arKWPlacement[1] << endl;
+            cout << "Place2:" << arKWPlacement[2] << endl;
+            cout << "Place3:" << arKWPlacement[3] << endl;
+            cout << "Place4:" << arKWPlacement[4] << endl;
+            cout << "Exit  Coord:" << coord_exit << endl;
+            cout << "State:"  << nState << endl;
+            cout << "Act:"    << nAct   << endl;
+            cout << ">>>>>>>>>>>>>>>>>>>> Please check the parameter <<<<<<<<<<<<<<<<<<" << endl;
+
+        }
+        void MainCallback(const ros::TimerEvent& e)
+        {
+            if(nAct == ACT_CLEAR && bGotoExit!= true)
             {
-                // 识别到动作 -->开启识别姿态
-                string Action = FindWord(YOLO_BBOX, arKWAction);
-                if (Action.length() > 0)
-                {
-                    ++nActionStage;
-                    if (nActionStage == 1)
-                    {
-                        Speak("动作识别开始");
-                        sleep(2);
-                        YoloStart();
-                    }
-                    if (nActionStage == 2)
-                    {
-                        string Action = FindWord(YOLO_BBOX, arKWAction);
-                        printf("识别到动作 - %s \n", Action.c_str());
-                        Speak(Action);
-                        YoloStart();
-                    }
-                    if (nActionStage == 3)
-                    {
-                        Speak("请展示下一个动作");
-                        YoloStart();
-                    }
-                    if (nActionStage == 4)
-                    {
-                        string Action = FindWord(YOLO_BBOX, arKWAction);
-                        printf("识别到动作 - %s \n", Action.c_str());
-                        Speak(Action);
-                        YoloStart();
-                        nPeopleCount++;
-                        nState = FIND_OBJECT;
-                    }
-                    YoloStart();
-                    // ActionDetect();
-                }
-            }
-            if (nState == FIND_OBJECT)
-            {
-                // 识别到物品-->开启物品抓取
-                nActionStage = 0;
-                string object = FindWord(YOLO_BBOX, arKWObject);
-                if (object.length() > 0)
-                {
-                    printf("识别到物品 - %s \n", object.c_str());
-                    bAction = true;
-                    // 物品抓取(空)
-                    nLitterCount++;
-                    Goto(arKWPlacement.back());
-                    arKWPlacement.pop_back();
-                    nState = FIND_PERSON;
-                }
-            }
-            if (bAction == true)
-            {
-                nState = STATE_GRAB; // 物品抓取
+                cout << "[Main]正在前往地点：" << arKWPlacement[1] << endl;
+                Goto(arKWPlacement[nPlaceCount]);
+                nPlaceCount++;
+                nAct = ACT_FIND_PERSON;
+                sleep(1);                
             }
 
-            if (nPeopleCount == 3 && nLitterCount == 3)
+            if(nAct == ACT_FIND_PERSON)
             {
-                nState = STATE_GOTO_EXIT;
+                if (!bPeopleFound)
+                {
+                    VelCmd(0, 0, 0.1);
+                }
+                else
+                {
+                    Fixed_View();
+                    ActionDetect();
+                    nAct = ACT_FIND_OBJECT;
+                }
+            }
+
+            if(nAct == ACT_FIND_OBJECT)
+            {
+                if(!bObjectFound)
+                {
+                    VelCmd(0, 0, 0.1);
+                }
+                else
+                {
+                    Grab();//预留接口 wzy写
+                    nAct = ACT_CLEAR;
+                }
+            }
+
+            if((nPeopleCount == 3 && nLitterCount == 3) || bGrab!= true)
                 bGotoExit = true;
+
+            if(bGotoExit == true)
+            {
+                cout << "[Main]任务完成!前往退出地点" << endl;
+                Goto(coord_exit);
+                sleep(5);
+                nState       = STATE_READY;
+                nAct         = ACT_CLEAR;
+                nActionStage = 0;
             }
         }
     

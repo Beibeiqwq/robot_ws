@@ -1,0 +1,6 @@
+enter: 'cmdA'
+place1: 'living room'
+place2: 'kitchen'
+place3: 'bedroom'
+place4: 'dining room'
+exit: 'exitA'
