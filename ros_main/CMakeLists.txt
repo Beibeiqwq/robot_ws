@@ -159,13 +159,13 @@ add_executable(ROBOCUP
   src/ROBOCUP.cpp
   src/action_manager/action_manager.cpp
 )
-add_executable(main
-  src/main.cpp
-  src/action_manager/action_manager.cpp
-)
+
 add_dependencies(ROBOCUP ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(ROBOCUP
   ${catkin_LIBRARIES}
+)
+add_executable(main
+  src/main.cpp
 )
 add_dependencies(main ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(main

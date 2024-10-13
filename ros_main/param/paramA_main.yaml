@@ -1,3 +1,4 @@
+name: 'paramA'
 enter: 'cmdA'
 place1: 'living room'
 place2: 'kitchen'

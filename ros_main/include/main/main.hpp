@@ -80,9 +80,10 @@ namespace Main
         ~MainNode() {};
         void init()
         {
-            ros::NodeHandle n;
+            ros::NodeHandle n("~");
             Init_keywords();
             /*---------------参数导入区---------------*/
+            n.param<string>("name",name_yaml,"default");
             n.param<string>("enter",coord_cmd,"cmdA");
             n.param<string>("place1",arKWPlacement[1],"living room");
             n.param<string>("place2",arKWPlacement[2],"kitchen");
@@ -103,6 +104,7 @@ namespace Main
             cout << "[Main]键入任意数字开始.... 按CTRL+Z退出" << endl;
             cin >> check_flag;
             nState = STATE_WAIT_ENTR;
+            cout << "[Main]State: STATE_WAIT_ENTR" << endl;
             while (ros::ok())
             {
                 if (nState == STATE_WAIT_ENTR)
@@ -112,12 +114,21 @@ namespace Main
                         Goto(coord_cmd);
                         Speak("我已到达进门地点");
                         sleep(2);
+                        cout << "[Main]State: STATE_ACTION" << endl;
                         nState = STATE_ACTION;
                     }
                 }
                 if(nState == STATE_ACTION)
                 {
-                    Task_Timer = n.createTimer(ros::Duration(0.05), &MainNode::MainCallback, this);
+                    cout << "[Main]创建主任务进程..." << endl;
+                    try
+                    {
+                        Task_Timer = n.createTimer(ros::Duration(0.05), &MainNode::MainCallback, this);
+                    }
+                    catch (std::exception& e)
+                    {
+                        std::cout << e.what() << std::endl;
+                    }
                 }
             }
         }
@@ -148,21 +159,28 @@ namespace Main
         bool bPeopleFound= false;    // 人物标志位
         bool bObjectFound= false;    // 物品标志位
         bool bGrab       = false;    // 抓取标志位
-        string strDetect;
+        string strDetect;            // 物品识别
         string coord_cmd;            // 进门坐标
         string coord_exit;           // 出门坐标
+        string name_yaml;            // 配置文件
         /*---------------数组/容器区---------------*/
         std::vector<BBox2D> YOLO_BBOX;                    // 识别结果
         std::vector<BBox2D>::const_iterator YOLO_BBOX_IT; // 迭代器
         // 关键词存放容器
-        vector<string> arKWPlacement;
-        vector<string> arKWObject;
-        vector<string> arKWPerson;
-        vector<string> arKWAction;
+        vector<string> arKWPlacement;//地点
+        vector<string> arKWObject;   //物品
+        vector<string> arKWPerson;   //人名
+        vector<string> arKWAction;   //行为
 
         /// @brief 关键词初始化
         void Init_keywords()
         {
+            arKWPlacement.push_back("none");
+            arKWPlacement.push_back("none");
+            arKWPlacement.push_back("none");
+            arKWPlacement.push_back("none");
+            arKWPlacement.push_back("none");
+            arKWPlacement.push_back("none");
             // 物品关键词
             arKWObject.push_back("Water");
             arKWObject.push_back("Chip");
@@ -197,6 +215,8 @@ namespace Main
             arKWAction.push_back("shake hand");
             arKWAction.push_back("shake both hands");
             arKWAction.push_back("smoking");
+
+            cout<<"[Init]关键词初始化完成！" << endl;
         }
 
         /// @brief 机器人速度修正
@@ -223,6 +243,7 @@ namespace Main
             vel_cmd.linear.x = VelFixed(inVx, vel_max);
             vel_cmd.linear.y = VelFixed(inVy, vel_max);
             vel_cmd.angular.z = VelFixed(inTz, vel_max);
+            cout << "设置机器人速度为" << "X:" << inVx << "Y:" << inVy << "Z:" << inTz << endl;
             vel_pub.publish(vel_cmd);
         }
 
@@ -238,12 +259,12 @@ namespace Main
                 std::string name = srvName.response.name;
                 float x = srvName.response.pose.position.x;
                 float y = srvName.response.pose.position.y;
-                ROS_INFO("Get_wp_name: name = %s (%.2f,%.2f)", strGoto.c_str(), x, y);
+                ROS_INFO("[Goto]Get_wp_name: name = %s (%.2f,%.2f)", strGoto.c_str(), x, y);
 
                 MoveBaseClient ac("move_base", true);
                 if (!ac.waitForServer(ros::Duration(5.0)))
                 {
-                    ROS_INFO("The move_base action server is no running. action abort...");
+                    ROS_INFO("[Goto]The move_base action server is no running. action abort...");
                     return false;
                 }
                 else
@@ -256,12 +277,12 @@ namespace Main
                     ac.waitForResult();
                     if (ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
                     {
-                        ROS_INFO("Arrived at %s!", strGoto.c_str());
+                        ROS_INFO("[Goto]Arrived at %s!", strGoto.c_str());
                         return true;
                     }
                     else
                     {
-                        ROS_INFO("Failed to get to %s ...", strGoto.c_str());
+                        ROS_INFO("[Goto]Failed to get to %s ...", strGoto.c_str());
                         return false;
                     }
                 }
@@ -306,11 +327,11 @@ namespace Main
             bool ok = client_speak.call(req, resp);
             if (ok)
             {
-                printf("send str2voice service success: %s", req.data.c_str());
+                printf("[Speak]send str2voice service success: %s", req.data.c_str());
             }
             else
             {
-                ROS_ERROR("failed to send str2voice service");
+                ROS_ERROR("[Speak]failed to send str2voice service");
             }
         }
 
@@ -342,6 +363,7 @@ namespace Main
         /// @brief 动作识别
         void ActionDetect()
         {
+            cout << "[ActionDetect]动作识别开始...." << endl;
             if (nActionStage == 0)
                 return;
             if (nActionStage == 1)
@@ -353,7 +375,6 @@ namespace Main
                 Speak("OK You can perform next action");
                 nPeopleCount++;
             }
-            // YoloStart();
             string Action = FindWord(YOLO_BBOX, arKWAction);
             printf("识别到动作 - %s \n", Action.c_str());
             Speak(Action);
@@ -364,7 +385,7 @@ namespace Main
         /// @param msg 
         void KeywordCB(const wpb_yolo5::BBox2D &msg)
         {
-            ROS_WARN("[KeywordCB]:Receive Yolov5 msg");
+            cout << "[KeywordCB]:接收到Yolov5数据" << endl;
             YOLO_BBOX.clear();
             int nNum = msg.name.size();
             bool bAction = false;
@@ -374,11 +395,11 @@ namespace Main
                 BBox2D box_object;             // bbox格式object 存入收到的msg
                 for (int i = 0; i < nNum; i++)
                 {
-                    box_object.name = msg.name[i];               // 识别到的名字
-                    box_object.left = msg.left[i];               // x_min
-                    box_object.right = msg.right[i];             // x_max
-                    box_object.top = msg.top[i];                 // y_min
-                    box_object.bottom = msg.bottom[i];           // y_max
+                    box_object.name        = msg.name[i];        // 识别到的名字
+                    box_object.left        = msg.left[i];        // x_min
+                    box_object.right       = msg.right[i];       // x_max
+                    box_object.top         = msg.top[i];         // y_min
+                    box_object.bottom      = msg.bottom[i];      // y_max
                     box_object.probability = msg.probability[i]; // 置信度
                     recv_BBOX.push_back(box_object);
                     std::string strDetect = msg.name[i];
@@ -391,6 +412,59 @@ namespace Main
         void Fixed_View()
         {
             cout << "[Fixed_View]位姿修正开始..." << endl;
+            //int size=sizeof(F2->num);
+            // int num = F2->num;
+
+            // ROS_INFO("***********************************");
+            // if (num != 0 | num != NULL)
+            // {
+            //     for (int i = 0; i < num; i++)
+            //     {
+
+            //         ROS_INFO("目标%d的坐标信息x为：%f,坐标信息y为：%f,坐标信息w为：%f,坐标信息h为：%f", i, F2->object[i].x, F2->object[i].y, F2->object[i].w, F2->object[i].h);
+            //     }
+            // }
+
+            // ROS_INFO("------------------GimbalStop-------------");
+            // machine.GimbalStop();
+            // ROS_INFO("------------------GimbalStop2-------------");
+
+            // if (num != 0 | num != NULL)
+            // {
+            //     if (F2->object[0].x != NULL & F2->object[0].y != NULL)
+            //     {
+            //         ROS_INFO("------------------Machinw-------------");
+            //         if (F2->object[0].x < 0.4) // SP zuo,DJ you
+            //         {
+            //             machine.GimbalMove(15, 0);
+            //         }
+            //         else if (F2->object[0].y < 0.4) // SP xia,DJ xia
+            //         {
+            //             machine.GimbalMove(0, -15);
+            //         }
+            //         else if (F2->object[0].x > 0.6) // SP you ,DJ zuo
+            //         {
+            //             machine.GimbalMove(-15, 0);
+            //         }
+            //         else if (F2->object[0].y > 0.6) // SP shang,DJ shang
+            //         {
+            //             machine.GimbalMove(0, 15);
+            //         }
+            //         else
+            //             machine.GimbalStop();
+            //     }
+            // }
+            // else
+            // {
+            //     machine.GimbalStop();
+            //     ROS_INFO("------------------GimbalStop3-------------");
+            // }
+        }
+
+        /// @brief OpenPose回调
+        void OpenPoseCB()
+        {
+            
         }
 
         /// @brief 物品抓取
@@ -398,26 +472,31 @@ namespace Main
         {
             cout<< "[Grub]物品抓取开始..."  << endl;
         }
+
         /// @brief 程序参数打印
         void Parameter_Check()
         {
             cout << ">>>>>>>>>>>>>>>>>>>>>>>>>> Parameter_Check <<<<<<<<<<<<<<<<<<<<<<<" << endl;
+            cout << "Yaml Name:"   << name_yaml << endl;
             cout << "Enter Coord:" << coord_cmd << endl;
+            cout << "Exit  Coord:" << coord_exit << endl;
             cout << "Place1:" << arKWPlacement[1] << endl;
             cout << "Place2:" << arKWPlacement[2] << endl;
             cout << "Place3:" << arKWPlacement[3] << endl;
             cout << "Place4:" << arKWPlacement[4] << endl;
-            cout << "Exit  Coord:" << coord_exit << endl;
             cout << "State:"  << nState << endl;
             cout << "Act:"    << nAct   << endl;
             cout << ">>>>>>>>>>>>>>>>>>>> Please check the parameter <<<<<<<<<<<<<<<<<<" << endl;
 
         }
+
+        /// @brief 主程序
+        /// @param e 
         void MainCallback(const ros::TimerEvent& e)
         {
             if(nAct == ACT_CLEAR && bGotoExit!= true)
             {
-                cout << "[Main]正在前往地点：" << arKWPlacement[1] << endl;
+                cout << "[Main]正在前往地点：" << arKWPlacement[nPlaceCount] << endl;
                 Goto(arKWPlacement[nPlaceCount]);
                 nPlaceCount++;
                 nAct = ACT_FIND_PERSON;
@@ -434,6 +513,7 @@ namespace Main
                 {
                     Fixed_View();
                     ActionDetect();
+                    nPeopleCount++;
                     nAct = ACT_FIND_OBJECT;
                 }
             }
@@ -447,16 +527,18 @@ namespace Main
                 else
                 {
                     Grab();//预留接口 wzy写
+                    nLitterCount++;
+                    nPlaceCount++;
                     nAct = ACT_CLEAR;
                 }
             }
 
-            if((nPeopleCount == 3 && nLitterCount == 3) || bGrab!= true)
+            if((nPeopleCount == 3 && nLitterCount == 3) && bGrab!= true)
                 bGotoExit = true;
 
             if(bGotoExit == true)
             {
-                cout << "[Main]任务完成!前往退出地点" << endl;
+                cout << "[Main]任务完成!前往退出地点...." << endl;
                 Goto(coord_exit);
                 sleep(5);
                 nState       = STATE_READY;
@@ -464,8 +546,6 @@ namespace Main
                 nActionStage = 0;
             }
         }
-    
-    
     };
 }
 
