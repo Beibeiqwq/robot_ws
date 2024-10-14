@@ -90,8 +90,10 @@ namespace Main
             n.param<string>("place3",arKWPlacement[3],"bedroom");
             n.param<string>("place4",arKWPlacement[4],"dining room");
             n.param<string>("exit",coord_exit,"exitA");
+            n.param<float>("PID_Forward",PID_Forward,0.002);
+            n.param<float>("PID_Turn",PID_Turn,0.003);
             /*---------------ROS初始化---------------*/
-            sub_yolo = n.subscribe("/yolo_bbox_2d", 10, &MainNode::KeywordCB,this);
+            sub_yolo = n.subscribe("/yolo_bbox_2d", 10, &MainNode::YOLOV5CB,this);
             sub_ent  = n.subscribe("/wpb_home/entrance_detect", 10, &MainNode::EntranceCB,this);
             client_speak = n.serviceClient<robot_voice::StringToVoice>("str2voice");
             cliGetWPName = n.serviceClient<waterplus_map_tools::GetWaypointByName>("/waterplus/get_waypoint_name");
@@ -152,13 +154,30 @@ namespace Main
         int nPeopleCount = 0;        // 人物计数
         int nLitterCount = 0;        // 垃圾计数
         int nPlaceCount  = 1;        // 地点计数
-        int nActionStage = 0;        // 动作标志位
+        int nActionStage = 0;        // 动作计数
+        int nYoloPeople  = -1;       // 人物编号
+        int iLowH        = 10;
+        int iHighH       = 40;
+        int iLowS        = 90;
+        int iHighS       = 255;
+        int iLowV        = 1;
+        int iHighV       = 255;
+        int nImgHeight   = 0;        // 画面中点纵坐标
+        int nImgWidth    = 0;        // 画面中点横坐标
+        int nTargetX     = 0;        // 目标任务纵坐标
+        int nTargetY     = 0;        // 目标任务横坐标
+        float fVelForward= 0;        // 修正前进速度
+        float fVelTurn   = 0;        // 修正转向速度
+        float PID_Forward= 0;        // 修正前进PID系数
+        float PID_Turn   = 0;        // 修正转向PID系数
         float vel_max    = 0.5;      // 移动限速
         bool bGotoExit   = false;    // 退出标志位
         bool bArrive     = false;    // 到达标志位
         bool bPeopleFound= false;    // 人物标志位
         bool bObjectFound= false;    // 物品标志位
         bool bGrab       = false;    // 抓取标志位
+        bool bFixView    = false;    // 位姿修正
+        bool bFixView_ok = false;    // 修正状态
         string strDetect;            // 物品识别
         string coord_cmd;            // 进门坐标
         string coord_exit;           // 出门坐标
@@ -166,6 +185,7 @@ namespace Main
         /*---------------数组/容器区---------------*/
         std::vector<BBox2D> YOLO_BBOX;                    // 识别结果
         std::vector<BBox2D>::const_iterator YOLO_BBOX_IT; // 迭代器
+        std::vector<BBox2D> recv_BBOX;
         // 关键词存放容器
         vector<string> arKWPlacement;//地点
         vector<string> arKWObject;   //物品
@@ -294,11 +314,11 @@ namespace Main
             }
         }
 
-        /// @brief 寻找关键词
+        /// @brief 寻找关键词 YOLO版
         /// @param inSentence 传入的句子 -- YoloV5 Node中
         /// @param arWord     关键词    -- Init_Keywords中
         /// @return 得到的关键词
-        string FindWord(vector<BBox2D> &YOLO_BBOX, vector<string> &arWord)
+        string FindWord_Yolo(vector<BBox2D> &YOLO_BBOX, vector<string> &arWord)
         {
             string strRes = "";
             int nNum = arWord.size();
@@ -312,6 +332,26 @@ namespace Main
                         strRes = arWord[j];
                         break;
                     }
+                }
+            }
+            return strRes;
+        }
+
+        /// @brief 寻找关键词 字符串版
+        /// @param inSentence 
+        /// @param arWord 
+        /// @return 字符串
+        string FindWord(string inSentence, vector<string> &arWord)
+        {
+            string strRes = "";
+            int nNum = arWord.size();
+            for (int i = 0; i < nNum; i++)
+            {
+                int tmpIndex = inSentence.find(arWord[i]);
+                if (tmpIndex >= 0)
+                {
+                    strRes = arWord[i];
+                    break;
                 }
             }
             return strRes;
@@ -375,23 +415,23 @@ namespace Main
                 Speak("OK You can perform next action");
                 nPeopleCount++;
             }
-            string Action = FindWord(YOLO_BBOX, arKWAction);
+            string Action = FindWord_Yolo(YOLO_BBOX, arKWAction);
             printf("识别到动作 - %s \n", Action.c_str());
             Speak(Action);
             sleep(2);
         }
 
-        /// @brief 关键词回调
+        /// @brief YOLO回调
         /// @param msg 
-        void KeywordCB(const wpb_yolo5::BBox2D &msg)
+        void YOLOV5CB(const wpb_yolo5::BBox2D &msg)
         {
-            cout << "[KeywordCB]:接收到Yolov5数据" << endl;
+            cout << "[YOLOV5CB]:接收到Yolov5数据" << endl;
             YOLO_BBOX.clear();
             int nNum = msg.name.size();
             bool bAction = false;
             if (nNum > 0)
             {
-                std::vector<BBox2D> recv_BBOX; // 收到的物品
+                //std::vector<BBox2D> recv_BBOX; // 收到的物品
                 BBox2D box_object;             // bbox格式object 存入收到的msg
                 for (int i = 0; i < nNum; i++)
                 {
@@ -403,62 +443,50 @@ namespace Main
                     box_object.probability = msg.probability[i]; // 置信度
                     recv_BBOX.push_back(box_object);
                     std::string strDetect = msg.name[i];
+                    string Peoplename = FindWord(box_object.name,arKWPerson);
+                    if(Peoplename.length() > 0)
+                    {
+                        nYoloPeople = i;
+                    }
                 }
                 YOLO_BBOX = recv_BBOX; // 存入object
             }
-        }
 
-        /// @brief 视角修正
-        void Fixed_View()
-        {
-            cout << "[Fixed_View]位姿修正开始..." << endl;
-            //int size=sizeof(F2->num);
-            // int num = F2->num;
-
-            // ROS_INFO("***********************************");
-            // if (num != 0 | num != NULL)
-            // {
-            //     for (int i = 0; i < num; i++)
-            //     {
-
-            //         ROS_INFO("目标%d的坐标信息x为：%f,坐标信息y为：%f,坐标信息w为：%f,坐标信息h为：%f", i, F2->object[i].x, F2->object[i].y, F2->object[i].w, F2->object[i].h);
-            //     }
-            // }
-
-            // ROS_INFO("------------------GimbalStop-------------");
-            // machine.GimbalStop();
-            // ROS_INFO("------------------GimbalStop2-------------");
-
-            // if (num != 0 | num != NULL)
-            // {
-            //     if (F2->object[0].x != NULL & F2->object[0].y != NULL)
-            //     {
-            //         ROS_INFO("------------------Machinw-------------");
-            //         if (F2->object[0].x < 0.4) // SP zuo,DJ you
-            //         {
-            //             machine.GimbalMove(15, 0);
-            //         }
-            //         else if (F2->object[0].y < 0.4) // SP xia,DJ xia
-            //         {
-            //             machine.GimbalMove(0, -15);
-            //         }
-            //         else if (F2->object[0].x > 0.6) // SP you ,DJ zuo
-            //         {
-            //             machine.GimbalMove(-15, 0);
-            //         }
-            //         else if (F2->object[0].y > 0.6) // SP shang,DJ shang
-            //         {
-            //             machine.GimbalMove(0, 15);
-            //         }
-            //         else
-            //             machine.GimbalStop();
-            //     }
-            // }
-            // else
-            // {
-            //     machine.GimbalStop();
-            //     ROS_INFO("------------------GimbalStop3-------------");
-            // }
+            ///@brief 位姿修正
+            if(bFixView == true)
+            {
+                cout << "[FixView]位姿修正开始...." << endl;
+                fVelForward = fVelTurn = 0;
+                if(nNum != 0 | nNum != NULL)
+                {
+                    if (YOLO_BBOX[nYoloPeople].left != NULL && YOLO_BBOX[nYoloPeople].top != NULL)
+                    {
+                        cout << "标定位置信息为:" << "x:" << YOLO_BBOX[nYoloPeople].left << "y:" << YOLO_BBOX[nYoloPeople].top << endl;
+                        if(YOLO_BBOX[nYoloPeople].left < 128)
+                        {
+                            //fVelForward = (nImgHeight / 2 - nTargetY) * PID_Forward;
+                            fVelTurn = (nImgWidth / 2 - nTargetY) * PID_Turn;
+                        }
+                        else if(YOLO_BBOX[nYoloPeople].left > 128)
+                        {
+                            fVelTurn = (nImgWidth / 2 - nTargetY) * PID_Turn;
+                        }
+                        else if(YOLO_BBOX[nYoloPeople].top < 128)
+                        {
+                            fVelForward = (nImgHeight / 2 - nTargetY) * PID_Forward;
+                        }
+                        else if(YOLO_BBOX[nYoloPeople].top > 128)
+                        {
+                            fVelForward = (nImgHeight / 2 - nTargetY) * PID_Forward;
+                        }
+                        else 
+                        {
+                            fVelForward = fVelForward = 0;
+                        }
+                    }
+                }
+                VelCmd(VelFixed(fVelForward,vel_max),0,VelFixed(fVelTurn,vel_max));
+            }
         }
 
         /// @brief OpenPose回调
@@ -484,6 +512,8 @@ namespace Main
             cout << "Place2:" << arKWPlacement[2] << endl;
             cout << "Place3:" << arKWPlacement[3] << endl;
             cout << "Place4:" << arKWPlacement[4] << endl;
+            cout << "PID_ForWard:" << PID_Forward << endl;
+            cout << "PID_Turn:" << PID_Turn << endl; 
             cout << "State:"  << nState << endl;
             cout << "Act:"    << nAct   << endl;
             cout << ">>>>>>>>>>>>>>>>>>>> Please check the parameter <<<<<<<<<<<<<<<<<<" << endl;
@@ -497,8 +527,8 @@ namespace Main
             if(nAct == ACT_CLEAR && bGotoExit!= true)
             {
                 cout << "[Main]正在前往地点：" << arKWPlacement[nPlaceCount] << endl;
-                Goto(arKWPlacement[nPlaceCount]);
-                nPlaceCount++;
+                Goto(arKWPlacement[nPlaceCount++]);
+                //nPlaceCount++;
                 nAct = ACT_FIND_PERSON;
                 sleep(1);                
             }
@@ -511,7 +541,8 @@ namespace Main
                 }
                 else
                 {
-                    Fixed_View();
+                    bFixView = true;
+                    if(bFixView_ok == true)
                     ActionDetect();
                     nPeopleCount++;
                     nAct = ACT_FIND_OBJECT;
@@ -528,7 +559,6 @@ namespace Main
                 {
                     Grab();//预留接口 wzy写
                     nLitterCount++;
-                    nPlaceCount++;
                     nAct = ACT_CLEAR;
                 }
             }
