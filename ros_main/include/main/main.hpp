@@ -95,6 +95,7 @@ namespace Main
             /*---------------ROS初始化---------------*/
             sub_yolo = n.subscribe("/yolo_bbox_2d", 10, &MainNode::YOLOV5CB,this);
             sub_ent  = n.subscribe("/wpb_home/entrance_detect", 10, &MainNode::EntranceCB,this);
+            sub_pose = n.subscribe("/Openpose", 10, &MainNode::OpenPoseCB,this);
             client_speak = n.serviceClient<robot_voice::StringToVoice>("str2voice");
             cliGetWPName = n.serviceClient<waterplus_map_tools::GetWaypointByName>("/waterplus/get_waypoint_name");
             spk_pub  = n.advertise<sound_play::SoundRequest>("/robotsound", 20);
@@ -142,6 +143,7 @@ namespace Main
         ros::Publisher yolo_pub;
         ros::Subscriber sub_yolo;
         ros::Subscriber sub_ent;
+        ros::Subscriber sub_pose;
         ros::ServiceClient client_speak;
         ros::ServiceClient cliGetWPName;
         ros::Timer Task_Timer;
@@ -177,6 +179,7 @@ namespace Main
         bool bObjectFound= false;    // 物品标志位
         bool bGrab       = false;    // 抓取标志位
         bool bFixView    = false;    // 位姿修正
+        bool bOpenpose   = false;    // 动作识别
         bool bFixView_ok = false;    // 修正状态
         string strDetect;            // 物品识别
         string coord_cmd;            // 进门坐标
@@ -404,6 +407,11 @@ namespace Main
         void ActionDetect()
         {
             cout << "[ActionDetect]动作识别开始...." << endl;
+            if(nActionStage == 3)
+            {
+                nActionStage = 1;
+                bOpenpose = false;
+            }
             if (nActionStage == 0)
                 return;
             if (nActionStage == 1)
@@ -415,10 +423,11 @@ namespace Main
                 Speak("OK You can perform next action");
                 nPeopleCount++;
             }
-            string Action = FindWord_Yolo(YOLO_BBOX, arKWAction);
-            printf("识别到动作 - %s \n", Action.c_str());
-            Speak(Action);
+            //string Action = FindWord_Yolo(YOLO_BBOX, arKWAction);
+            printf("识别到动作 - %s \n", strDetect.c_str());
+            Speak(strDetect);
             sleep(2);
+            nActionStage++;
         }
 
         /// @brief YOLO回调
@@ -447,6 +456,10 @@ namespace Main
                     if(Peoplename.length() > 0)
                     {
                         nYoloPeople = i;
+                        nImgHeight = box_object.top - box_object.bottom;
+                        nImgWidth  = box_object.right - box_object.left;
+                        nTargetX   = 128;
+                        nTargetY   = 128;
                     }
                 }
                 YOLO_BBOX = recv_BBOX; // 存入object
@@ -486,13 +499,24 @@ namespace Main
                     }
                 }
                 VelCmd(VelFixed(fVelForward,vel_max),0,VelFixed(fVelTurn,vel_max));
+                bFixView_ok = true;
+                bFixView = false;
             }
         }
 
         /// @brief OpenPose回调
-        void OpenPoseCB()
+        void OpenPoseCB(const std::string &msg)
         {
-            
+            cout<< "[OpenPoseCB]接收到OpenPose数据" << endl;
+            std::string sAction;
+            if(bOpenpose == true)  //写为开关模式？
+            {
+                sAction = FindWord(msg,arKWAction);
+                if(sAction.length() > 0)
+                {
+                    strDetect = sAction;
+                }
+            }
         }
 
         /// @brief 物品抓取
@@ -533,7 +557,7 @@ namespace Main
                 sleep(1);                
             }
 
-            if(nAct == ACT_FIND_PERSON)
+            if(nAct == ACT_FIND_PERSON && bGotoExit != true)
             {
                 if (!bPeopleFound)
                 {
@@ -543,13 +567,16 @@ namespace Main
                 {
                     bFixView = true;
                     if(bFixView_ok == true)
-                    ActionDetect();
+                    {
+                        ActionDetect();
+                        bFixView_ok = false;
+                    }
                     nPeopleCount++;
                     nAct = ACT_FIND_OBJECT;
                 }
             }
 
-            if(nAct == ACT_FIND_OBJECT)
+            if(nAct == ACT_FIND_OBJECT && bGotoExit != true)
             {
                 if(!bObjectFound)
                 {
