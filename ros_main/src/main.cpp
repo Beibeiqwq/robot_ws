@@ -1,5 +1,4 @@
 #include <ros/ros.h>
-//#include <main/Robot_Act.h>
 #include <RobotAct.h>
 /*---------------状态机区---------------*/
 #define STATE_READY               0

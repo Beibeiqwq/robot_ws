@@ -1,4 +1,3 @@
-// #include "Robot_Act.h"
 #include "RobotAct.h"
 static string strToSpeak = "";
 static string strKeyWord = "";
@@ -226,8 +225,6 @@ bool RobotAct::Main()
         usleep(arAct[nCurActIndex].nDuration * 1000 * 1000);
         nCurActIndex++;
         break;
-
-    
 
     case ACT_ADD_WAYPOINT:
         if (nLastActCode != ACT_ADD_WAYPOINT)
