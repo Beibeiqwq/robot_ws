@@ -133,6 +133,102 @@ bool RobotAct::Main()
     // nLastActCode == 上一个任务ID
     switch (nCurActCode)
     {
+    case ACT_GOTO:
+        if (nLastActCode != ACT_GOTO)
+        {
+            string StrGoto = arAct[nCurActIndex].strTarget;
+             printf("[RobotAct] %d - Find %s\n",nCurActIndex,arAct[nCurActIndex].strTarget.c_str());
+            Goto(StrGoto); 
+            nCurActIndex++;
+        }
+        break;
+
+    case ACT_GRAB:
+        if (nLastActCode != ACT_GRAB)
+        {
+            printf("[RobotAct] %d - Grab %s\n", nCurActIndex, arAct[nCurActIndex].strTarget.c_str());
+            bGrabDone = false;
+            GrabSwitch(true);
+        }
+        if (bGrabDone == true)
+        {
+            printf("[RobotAct] %d - Grab %s done!\n", nCurActIndex, arAct[nCurActIndex].strTarget.c_str());
+            GrabSwitch(false);
+            nCurActIndex++;
+        }
+        break;
+
+    case ACT_PASS:
+        if (nLastActCode != ACT_PASS)
+        {
+            printf("[RobotAct] %d - Pass %s\n", nCurActIndex, arAct[nCurActIndex].strTarget.c_str());
+            bPassDone = false;
+            PassSwitch(true);
+        }
+        if (bPassDone == true)
+        {
+            printf("[RobotAct] %d - Pass %s done!\n", nCurActIndex, arAct[nCurActIndex].strTarget.c_str());
+            PassSwitch(false);
+            nCurActIndex++;
+        }
+        break;
+
+    case ACT_SPEAK:
+        if (nLastActCode != ACT_SPEAK)
+        {
+            printf("[RobotAct] %d - Speak %s\n", nCurActIndex, arAct[nCurActIndex].strTarget.c_str());
+            strToSpeak = arAct[nCurActIndex].strTarget;
+            std_msgs::String rosSpeak;
+            rosSpeak.data = strToSpeak;
+            speak_pub.publish(rosSpeak);
+            strToSpeak = "";
+            usleep(arAct[nCurActIndex].nDuration * 1000 * 1000);
+            nCurActIndex++;
+        }
+        break;
+
+    // case ACT_LISTEN:
+    //     if (nLastActCode != ACT_LISTEN)
+    //     {
+    //         printf("[RobotAct] %d - Listen %s\n", nCurActIndex, arAct[nCurActIndex].strTarget.c_str());
+    //         strListen = "";
+    //         strKeyWord = arAct[nCurActIndex].strTarget;
+    //         int nDur = arAct[nCurActIndex].nDuration;
+    //         if (nDur < 3)
+    //         {
+    //             nDur = 3;
+    //         }
+    //         // 开始语音识别
+    //         srvIAT.request.active = true;
+    //         srvIAT.request.duration = nDur;
+    //         clientIAT.call(srvIAT);
+    //     }
+    //     nKeyWord = strListen.find(strKeyWord);
+    //     if (nKeyWord >= 0)
+    //     {
+    //         // 识别完毕,关闭语音识别
+    //         srvIAT.request.active = false;
+    //         clientIAT.call(srvIAT);
+    //         nCurActIndex++;
+    //     }
+    //     break;
+
+    case ACT_MOVE:
+        printf("[RobotAct] %d - Move ( %.2f , %.2f ) - %.2f\n", nCurActIndex, arAct[nCurActIndex].fLinear_x, arAct[nCurActIndex].fLinear_y, arAct[nCurActIndex].fAngular_z);
+        vel_cmd.linear.x = arAct[nCurActIndex].fLinear_x;
+        vel_cmd.linear.y = arAct[nCurActIndex].fLinear_y;
+        vel_cmd.linear.z = 0;
+        vel_cmd.angular.x = 0;
+        vel_cmd.angular.y = 0;
+        vel_cmd.angular.z = arAct[nCurActIndex].fAngular_z;
+        speed_pub.publish(vel_cmd);
+
+        usleep(arAct[nCurActIndex].nDuration * 1000 * 1000);
+        nCurActIndex++;
+        break;
+
+    
+
     case ACT_ADD_WAYPOINT:
         if (nLastActCode != ACT_ADD_WAYPOINT)
         {
