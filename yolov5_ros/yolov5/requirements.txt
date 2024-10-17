@@ -8,8 +8,8 @@ Pillow>=7.1.2
 PyYAML>=5.3.1
 requests>=2.23.0
 scipy>=1.4.1
-torch==2.1.2
-torchvision==0.16.2
+torch>=2.1.2
+torchvision>=0.16.2
 tqdm>=4.41.0
 
 # Logging -------------------------------------
@@ -25,8 +25,8 @@ seaborn>=0.11.0
 # onnx>=1.9.0  # ONNX export
 # onnx-simplifier>=0.3.6  # ONNX simplifier
 # scikit-learn==0.19.2  # CoreML quantization
-# tensorflow>=2.4.1  # TFLite export
-# tensorflowjs>=3.9.0  # TF.js export
+tensorflow>=2.4.1  # TFLite export
+tensorflowjs>=3.9.0  # TF.js export
 # openvino-dev  # OpenVINO export
 
 # ROS --------------------------------------
